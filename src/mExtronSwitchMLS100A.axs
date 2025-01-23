@@ -1,5 +1,5 @@
 MODULE_NAME='mExtronSwitchMLS100A'      (
-                                            dev vdvControl,
+                                            dev vdvObject,
                                             dev dvPort
                                         )
 
@@ -112,7 +112,7 @@ DEFINE_MUTUALLY_EXCLUSIVE
 (* EXAMPLE: DEFINE_FUNCTION <RETURN_TYPE> <NAME> (<PARAMETERS>) *)
 (* EXAMPLE: DEFINE_CALL '<NAME>' (<PARAMETERS>) *)
 define_function SendStringRaw(char cParam[]) {
-     NAVLog(NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_STRING_TO, dvPort, cParam))
+     NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_STRING_TO, dvPort, cParam))
     send_string dvPort,"cParam"
     wait(1) iCommandBusy = false
 }
@@ -133,7 +133,7 @@ define_function Drive() {
             if (iPendingRequired[i][x] && !iCommandBusy) {
                 iPendingRequired[i][x] = false
                 //iPending = false
-                //if (iOutputRequired[i][x] <> (iOutputActual[2][x] || iOutputActual[3][x])) {
+                //if (iOutputRequired[i][x] != (iOutputActual[2][x] || iOutputActual[3][x])) {
                 iCommandBusy = true
                 BuildString(iOutputRequired[i][x],i)
                 //}else {
@@ -146,7 +146,7 @@ define_function Drive() {
             if (iPendingRequired[i][x] && !iCommandBusy) {
                 iPendingRequired[i][x] = false
                 //iPending = false
-                //if (iOutputRequired[i][x] <> iOutputActual[i][x]) {
+                //if (iOutputRequired[i][x] != iOutputActual[i][x]) {
                 iCommandBusy = true
                 BuildString(iOutputRequired[i][x],i)
                 //}else {
@@ -175,7 +175,7 @@ define_function Process() {
     while (length_array(cRxBuffer) && NAVContains(cRxBuffer,"NAV_LF")) {
     cTemp = remove_string(cRxBuffer,"NAV_LF",1)
     if (length_array(cTemp)) {
-        NAVLog(NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_PARSING_STRING_FROM, dvPort, cTemp))
+        NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_PARSING_STRING_FROM, dvPort, cTemp))
         cTemp = NAVStripCharsFromRight(cTemp, 2)     //Remove CRLF
         select {
         /*
@@ -195,7 +195,7 @@ define_function Process() {
                 iInputHasSignal[x] = atoi(NAVStripCharsFromRight(remove_string(cTemp,' ',1),1))
             }
 
-            send_string vdvControl,"'INPUT_SIGNAL-',itoa(x),',',itoa(iInputHasSignal[x])"
+            send_string vdvObject,"'INPUT_SIGNAL-',itoa(x),',',itoa(iInputHasSignal[x])"
             }
         }
         active (NAVContains(cTemp,'In')): {
@@ -218,7 +218,7 @@ define_function Process() {
             }
 
             //Send back to main source
-            send_string vdvControl,"'SWITCH-',itoa(iInput),',',upper_string(cTemp)"
+            send_string vdvObject,"'SWITCH-',itoa(iInput),',',upper_string(cTemp)"
         }
         active (NAVContains(cTemp,'V') && NAVContains(cTemp,'F') && NAVContains(cTemp,'Vmt') && NAVContains(cTemp,'Amt')): {
             stack_var integer iInput
@@ -227,18 +227,18 @@ define_function Process() {
             iOutputActual[1][1] = iInput
             iOutputActual[2][1] = iInput
             iOutputActual[3][1] = iInput
-            send_string vdvControl,"'SWITCH-',itoa(iInput),',ALL'"
-            send_string vdvControl,"'SWITCH-',itoa(iInput),',VID'"
-            send_string vdvControl,"'SWITCH-',itoa(iInput),',AUD'"
+            send_string vdvObject,"'SWITCH-',itoa(iInput),',ALL'"
+            send_string vdvObject,"'SWITCH-',itoa(iInput),',VID'"
+            send_string vdvObject,"'SWITCH-',itoa(iInput),',AUD'"
         }
         */
         active (NAVContains(cTemp,'Vol')): {
             stack_var sinteger siTemp
             remove_string(cTemp,'Vol',1)
             siTemp = atoi(cTemp)
-            if (siTemp <> siCurrentVolume) {
+            if (siTemp != siCurrentVolume) {
             siCurrentVolume = siTemp
-            send_level vdvControl,VOL_LVL,NAVScaleValue(siCurrentVolume, 100, 255, 0)
+            send_level vdvObject,VOL_LVL,NAVScaleValue(siCurrentVolume, 100, 255, 0)
             }
         }
         active (NAVContains(cTemp,'Amt')): {
@@ -292,26 +292,26 @@ data_event[dvPort] {
         send_command data.device,"'HSOFF'"
         //SendStringRaw("NAV_ESC,'3CV',NAV_CR")    //Set Verbose Mode to verbose and tagged
         Init()
-        timeline_create(TL_DRIVE,ltDrive,length_array(ltDrive),timeline_absolute,timeline_repeat)
+        NAVTimelineStart(TL_DRIVE,ltDrive,timeline_absolute,timeline_repeat)
     }
     }
     string: {
     if (iModuleEnabled) {
         iCommunicating = true
-        [vdvControl,DATA_INITIALIZED] = true
+        [vdvObject,DATA_INITIALIZED] = true
         TimeOut()
-         NAVLog(NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_STRING_FROM, dvPort, data.text))
+         NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_STRING_FROM, dvPort, data.text))
         if (!iSemaphore) { Process() }
     }
     }
 }
 
-data_event[vdvControl] {
+data_event[vdvObject] {
     command: {
     stack_var char cCmdHeader[NAV_MAX_CHARS]
     stack_var char cCmdParam[3][NAV_MAX_CHARS]
     if (iModuleEnabled) {
-        NAVLog(NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_COMMAND_FROM, data.device, data.text))
+        NAVErrorLog(NAV_LOG_LEVEL_DEBUG, NAVFormatStandardLogMessage(NAV_STANDARD_LOG_MESSAGE_TYPE_COMMAND_FROM, data.device, data.text))
         cCmdHeader = DuetParseCmdHeader(data.text)
         cCmdParam[1] = DuetParseCmdParam(data.text)
         cCmdParam[2] = DuetParseCmdParam(data.text)
@@ -321,7 +321,7 @@ data_event[vdvControl] {
             switch (cCmdParam[1]) {
             case 'IP_ADDRESS': {
                 //cIPAddress = cCmdParam[2]
-                //timeline_create(TL_IP_CHECK,ltIPCheck,length_array(ltIPCheck),timeline_absolute,timeline_repeat)
+                //NAVTimelineStart(TL_IP_CHECK,ltIPCheck,timeline_absolute,timeline_repeat)
             }
             case 'ID': {
                 //cID = format('%02d',atoi(cCmdParam[2]))
@@ -361,12 +361,12 @@ timeline_event[TL_NAV_FEEDBACK] {
     /*
     if (iNumberOfInputs) {
     for (x = 1; x <= iNumberOfInputs; x++) {
-        [vdvControl,NAV_INPUT_SIGNAL[x]]    =    (iInputHasSignal[x])
+        [vdvObject,NAV_INPUT_SIGNAL[x]]    =    (iInputHasSignal[x])
     }
     }
     */
 
-    [vdvControl,DEVICE_COMMUNICATING]     = (iCommunicating)
+    [vdvObject,DEVICE_COMMUNICATING]     = (iCommunicating)
 }
 
 
